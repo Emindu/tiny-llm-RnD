@@ -1,0 +1,5 @@
+OLLAMA_URL          = "http://localhost:11434/api/chat"
+BINANCE_URL         = "https://api.binance.com"
+BINANCE_FUTURES_URL = "https://fapi.binance.com"
+MODEL               = "gemma4:e4b"
+LOG_FILE            = "signals.log"
