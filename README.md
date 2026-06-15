@@ -1,14 +1,14 @@
-# Binance Symbol Scout Agent
+# Local Finance Agent — LLM Capability Experiment
 
 > **Experimental Project** — This is a research sandbox for exploring the autonomous tool-calling capabilities of local LLMs running via [Ollama](https://ollama.com). It is not production software and should not be used for real trading decisions.
 
-A local AI agent that scans Binance spot and perpetual futures markets in real time, computes technical indicators, and surfaces trading signals — used here as a complex, real-world task to stress-test how well small local models (e.g. `gemma4:e4b`) can reason, plan multi-step tool calls, and produce structured analysis without any cloud dependencies.
+A local AI finance agent that queries live market data in real time, computes technical indicators, and surfaces trading signals — used here as a complex, real-world task to stress-test how well small local models (e.g. `gemma4:e4b`) can reason, plan multi-step tool calls, and produce structured financial analysis without any cloud dependencies.
 
 ---
 
 ## What is this testing?
 
-This project uses cryptocurrency market analysis as a demanding benchmark for local LLM reasoning. The goal is to observe and evaluate:
+This project uses financial market analysis as a demanding benchmark for local LLM reasoning. The goal is to observe and evaluate:
 
 - **Autonomous tool selection** — can the model decide which tools to call and in what order, without being told?
 - **Multi-step planning** — does it correctly chain `fetch_top_symbols → get_symbol_klines → get_futures_data → get_order_book_depth` without hand-holding?
@@ -16,13 +16,13 @@ This project uses cryptocurrency market analysis as a demanding benchmark for lo
 - **Context management** — how does it behave as conversation history grows across multiple turns?
 - **Local model limits** — where do small models hallucinate, skip steps, or fail to follow the system prompt?
 
-The Binance domain was chosen because it provides a free, real-time, public API with rich structured data — giving the model plenty of grounding material without requiring any credentials.
+Financial market data was chosen because it provides free, real-time, public APIs with rich structured data — giving the model plenty of grounding material without requiring any credentials.
 
 ---
 
 ## Features
 
-- **Live market data** — pulls directly from Binance public REST APIs (no API key required)
+- **Live market data** — pulls directly from public market REST APIs (no API key required)
 - **Technical analysis** — RSI-14, MACD(12,26,9), Bollinger Bands(20,2), EMA 9/21 crossover, ATR(14)
 - **Multi-timeframe confirmation** — automatically checks higher TFs (15m→1h→4h→1d) in parallel and reports `stack_aligned`
 - **Futures market structure** — funding rate, open interest trend (8h), long/short ratio
@@ -40,7 +40,7 @@ The Binance domain was chosen because it provides a free, real-time, public API 
 main.py               CLI entry point
 agent/
 ├── config.py         Constants (URLs, model name, log file)
-├── api.py            HTTP helpers for Binance REST + Ollama chat API
+├── api.py            HTTP helpers for market data REST APIs + Ollama chat API
 ├── indicators.py     Pure-Python technical indicators (no numpy/pandas)
 ├── tools.py          Tool implementations + JSON schema for the LLM
 ├── core.py           Agentic loop, system prompt, message pruning
@@ -76,8 +76,8 @@ graph TB
         end
 
         subgraph API["api.py — HTTP Layer"]
-            SPOT[_binance_get<br/>Binance Spot REST]
-            FUT[_futures_get<br/>Binance Futures REST]
+            SPOT[_market_get<br/>Spot Market REST]
+            FUT[_futures_get<br/>Futures Market REST]
             OL[_ollama_post<br/>Ollama Chat API]
         end
 
@@ -101,8 +101,8 @@ graph TB
 
     subgraph External["External Services"]
         OLLAMA[Ollama<br/>localhost:11434<br/>gemma4:e4b]
-        BSPOT[Binance Spot API<br/>api.binance.com]
-        BFUT[Binance Futures API<br/>fapi.binance.com]
+        MSPOT[Spot Market API<br/>public REST endpoint]
+        MFUT[Futures Market API<br/>public REST endpoint]
     end
 
     subgraph Output["Output"]
@@ -131,8 +131,8 @@ graph TB
     T5 --> FUT
     T6 --> FUT
 
-    SPOT --> BSPOT
-    FUT --> BFUT
+    SPOT --> MSPOT
+    FUT --> MFUT
 
     Core --> CHAT
     Scanner --> LOG
@@ -150,7 +150,7 @@ sequenceDiagram
     participant C as core.py
     participant LLM as Ollama (gemma4:e4b)
     participant T as tools.py
-    participant B as Binance APIs
+    participant B as Market Data APIs
 
     U->>M: query (text or --watch)
     M->>C: run_agent(query, history)
@@ -218,10 +218,10 @@ Pick a numbered example or type any free-form question:
 ```
   1. What are the top 5 momentum plays right now?
   2. Find the biggest gainers with high volume today
-  3. Which USDT pairs have the tightest spreads and best liquidity?
-  4. Show me coins that look oversold (low RSI) with rising volume
-  5. Compare SOL and AVAX — which has better momentum right now?
-  6. Find coins with Bollinger squeeze setups (low bandwidth) ready to break out
+  3. Which pairs have the tightest spreads and best liquidity?
+  4. Show me assets that look oversold (low RSI) with rising volume
+  5. Compare two assets — which has better momentum right now?
+  6. Find assets with Bollinger squeeze setups (low bandwidth) ready to break out
   7. Which symbols have bullish MACD crossovers and negative funding rates?
 ```
 
@@ -248,11 +248,11 @@ Each scan pre-fetches all three market-cap tiers (large / mid / low), asks the a
 
 | Tool | Description |
 |------|-------------|
-| `fetch_top_symbols` | Rank Binance pairs by volume, gainers, losers, or trade count; filter by market-cap tier |
+| `fetch_top_symbols` | Rank market pairs by volume, gainers, losers, or trade count; filter by market-cap tier |
 | `get_symbol_klines` | OHLCV candles + RSI, MACD, Bollinger Bands, EMA crossover, ATR, momentum; optional HTF stack |
 | `get_order_book_depth` | Bid/ask spread, bid/ask liquidity, buy/sell ratio |
 | `get_symbol_detail` | 24h price stats: VWAP, high/low, volume, trade count |
-| `scan_futures_sentiment` | Bulk-scan all USDT perps ranked by funding rate (crowded shorts/longs detection) |
+| `scan_futures_sentiment` | Bulk-scan all perpetual futures ranked by funding rate (crowded shorts/longs detection) |
 | `get_futures_data` | Per-symbol: funding rate, OI 8h trend, global long/short ratio |
 
 ---
@@ -279,8 +279,8 @@ Edit `agent/config.py` to change the model or endpoints:
 
 ```python
 OLLAMA_URL          = "http://localhost:11434/api/chat"
-BINANCE_URL         = "https://api.binance.com"
-BINANCE_FUTURES_URL = "https://fapi.binance.com"
+MARKET_API_URL      = "https://<spot-market-api-base>"
+FUTURES_API_URL     = "https://<futures-api-base>"
 MODEL               = "gemma4:e4b"
 LOG_FILE            = "signals.log"
 ```
