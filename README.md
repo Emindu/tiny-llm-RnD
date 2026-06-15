@@ -31,6 +31,129 @@ agent/
 └── scanner.py        Continuous signal scanner and signal query builder
 ```
 
+### System Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph Entry["Entry Point"]
+        M[main.py<br/>CLI / argparse]
+    end
+
+    subgraph Modes["Operating Modes"]
+        IC[Interactive Chat<br/>multi-turn session]
+        WM[Watch Mode<br/>--watch --interval N]
+    end
+
+    subgraph AgentPkg["agent/ package"]
+        CFG[config.py<br/>URLs · MODEL · LOG_FILE]
+
+        subgraph Core["core.py — Agentic Loop"]
+            direction TB
+            SYS[System Prompt<br/>5-step workflow]
+            LOOP[Tool-call loop<br/>max 10 iterations]
+            PRUNE[Message pruning<br/>keep last 6 tool pairs]
+        end
+
+        subgraph Scanner["scanner.py"]
+            BQ[build_signal_query<br/>pre-fetch all tiers]
+            SCHED[Scheduler<br/>sleep → repeat]
+        end
+
+        subgraph API["api.py — HTTP Layer"]
+            SPOT[_binance_get<br/>Binance Spot REST]
+            FUT[_futures_get<br/>Binance Futures REST]
+            OL[_ollama_post<br/>Ollama Chat API]
+        end
+
+        subgraph Indicators["indicators.py"]
+            RSI[RSI-14]
+            MACD[MACD 12·26·9]
+            BB[Bollinger Bands 20·2]
+            EMA[EMA 9/21 crossover]
+            ATR[ATR-14]
+        end
+
+        subgraph Tools["tools.py — LLM-callable Tools"]
+            T1[fetch_top_symbols<br/>rank by vol/gainers/losers]
+            T2[get_symbol_klines<br/>OHLCV + indicators + HTF stack]
+            T3[get_order_book_depth<br/>spread · liquidity · buy/sell ratio]
+            T4[get_symbol_detail<br/>24h stats · VWAP]
+            T5[scan_futures_sentiment<br/>bulk funding-rate scan]
+            T6[get_futures_data<br/>funding · OI trend · L/S ratio]
+        end
+    end
+
+    subgraph External["External Services"]
+        OLLAMA[Ollama<br/>localhost:11434<br/>gemma4:e4b]
+        BSPOT[Binance Spot API<br/>api.binance.com]
+        BFUT[Binance Futures API<br/>fapi.binance.com]
+    end
+
+    subgraph Output["Output"]
+        CHAT[Terminal<br/>chat response]
+        LOG[signals.log<br/>timestamped scan results]
+    end
+
+    M --> IC
+    M --> WM
+    IC --> Core
+    WM --> Scanner
+    Scanner --> BQ --> SPOT
+    Scanner --> Core
+
+    Core --> SYS
+    Core --> LOOP
+    LOOP --> PRUNE
+    LOOP --> Tools
+    LOOP --> OL --> OLLAMA
+
+    T1 --> SPOT
+    T2 --> SPOT
+    T2 --> Indicators
+    T3 --> SPOT
+    T4 --> SPOT
+    T5 --> FUT
+    T6 --> FUT
+
+    SPOT --> BSPOT
+    FUT --> BFUT
+
+    Core --> CHAT
+    Scanner --> LOG
+
+    CFG -.->|constants| API
+    CFG -.->|constants| Core
+```
+
+### Agentic Query Workflow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant M as main.py
+    participant C as core.py
+    participant LLM as Ollama (gemma4:e4b)
+    participant T as tools.py
+    participant B as Binance APIs
+
+    U->>M: query (text or --watch)
+    M->>C: run_agent(query, history)
+    C->>LLM: messages + tool schemas
+    LLM-->>C: tool_calls[]
+
+    loop Agentic loop (max 10 iterations)
+        C->>T: execute tool(args)
+        T->>B: REST request
+        B-->>T: market data
+        T-->>C: tool result (JSON)
+        C->>LLM: tool results → next step
+        LLM-->>C: tool_calls[] or final answer
+    end
+
+    C-->>M: (final_answer, updated_history)
+    M-->>U: display answer / append to signals.log
+```
+
 The agent follows a five-step workflow on every query:
 
 ```
