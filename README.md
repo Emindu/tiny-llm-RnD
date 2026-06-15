@@ -1,6 +1,22 @@
 # Binance Symbol Scout Agent
 
-A local AI agent that scans Binance spot and perpetual futures markets in real time, computes technical indicators, and surfaces the best trading signals — all running on your machine via [Ollama](https://ollama.com).
+> **Experimental Project** — This is a research sandbox for exploring the autonomous tool-calling capabilities of local LLMs running via [Ollama](https://ollama.com). It is not production software and should not be used for real trading decisions.
+
+A local AI agent that scans Binance spot and perpetual futures markets in real time, computes technical indicators, and surfaces trading signals — used here as a complex, real-world task to stress-test how well small local models (e.g. `gemma4:e4b`) can reason, plan multi-step tool calls, and produce structured analysis without any cloud dependencies.
+
+---
+
+## What is this testing?
+
+This project uses cryptocurrency market analysis as a demanding benchmark for local LLM reasoning. The goal is to observe and evaluate:
+
+- **Autonomous tool selection** — can the model decide which tools to call and in what order, without being told?
+- **Multi-step planning** — does it correctly chain `fetch_top_symbols → get_symbol_klines → get_futures_data → get_order_book_depth` without hand-holding?
+- **Structured output quality** — does it extract and interpret numeric indicators (RSI, MACD, funding rate) correctly from raw JSON?
+- **Context management** — how does it behave as conversation history grows across multiple turns?
+- **Local model limits** — where do small models hallucinate, skip steps, or fail to follow the system prompt?
+
+The Binance domain was chosen because it provides a free, real-time, public API with rich structured data — giving the model plenty of grounding material without requiring any credentials.
 
 ---
 
@@ -271,6 +287,20 @@ LOG_FILE            = "signals.log"
 
 ---
 
+## Experimental Notes
+
+Observations and known limitations when running with small local models:
+
+- Models smaller than ~7B parameters often skip tool calls and answer from training data instead
+- Multi-step chains of 4+ tools work reliably with `gemma4:e4b` but degrade with weaker models
+- Context pruning (keeping last 6 tool pairs) is critical — models lose coherence without it
+- `stack_aligned` multi-timeframe logic is the hardest for models to reason about correctly
+- Structured JSON output quality varies significantly between model families
+
+Feel free to swap the model in `agent/config.py` and compare behaviour.
+
+---
+
 ## Disclaimer
 
-This tool is for **informational and educational purposes only**. It does not execute trades, manage funds, or provide financial advice. Always do your own research before making any trading decisions.
+This project is for **experimental and educational purposes only**. It does not execute trades, manage funds, or provide financial advice. Market data is used solely as a test input for local LLM evaluation.
